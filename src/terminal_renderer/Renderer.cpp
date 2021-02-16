@@ -15,6 +15,7 @@
 #include <terminal_renderer/TextRenderer.h>
 
 #include <text_shaper/open_shaper.h>
+#include <text_shaper/directwrite_shaper.h>
 
 #include <crispy/logger.h>
 
@@ -81,7 +82,13 @@ Renderer::Renderer(Size const& _screenSize,
                    Decorator _hyperlinkNormal,
                    Decorator _hyperlinkHover,
                    unique_ptr<RenderTarget> _renderTarget) :
-    textShaper_{ make_unique<text::open_shaper>(text::vec2{_logicalDpiX, _logicalDpiY}) },
+    textShaper_{
+        #if defined(_WIN32)
+        make_unique<text::directwrite_shaper>(text::vec2{_logicalDpiX, _logicalDpiY})
+        #else
+        make_unique<text::open_shaper>(text::vec2{_logicalDpiX, _logicalDpiY})
+        #endif
+    },
     fontDescriptions_{ _fontDescriptions },
     fonts_{ loadFontKeys(fontDescriptions_, *textShaper_) },
     gridMetrics_{ loadGridMetrics(fonts_.regular, _screenSize, *textShaper_) },
