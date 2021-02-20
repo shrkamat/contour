@@ -67,6 +67,8 @@ struct FontInfo
 {
     font_description description;
     font_size size;
+    font_metrics metrics;
+    int fontUnitsPerEm;
 
     ComPtr<IDWriteFont3> font;
     ComPtr<IDWriteFontFace5> fontFace;
@@ -99,31 +101,26 @@ struct directwrite_shaper::Private
         return result;
     }
 
-    int computeAverageAdvance(font_key _font)
+    int computeAverageAdvance(IDWriteFontFace* _fontFace)
     {
         auto constexpr firstCharIndex = UINT16{32};
         auto constexpr lastCharIndex = UINT16{127};
         auto constexpr charCount = lastCharIndex - firstCharIndex + 1;
 
-        auto const& fontInfo = fonts.at(_font);
-
         UINT32 codePoints[charCount]{};
         for (UINT16 i = 0; i < charCount; i++)
             codePoints[i] = firstCharIndex + i;
         UINT16 glyphIndices[charCount]{};
-        fontInfo.fontFace->GetGlyphIndicesA(codePoints, charCount, glyphIndices);
+        _fontFace->GetGlyphIndicesA(codePoints, charCount, glyphIndices);
 
         DWRITE_GLYPH_METRICS dwGlyphMetrics[charCount]{};
-        fontInfo.fontFace->GetDesignGlyphMetrics(glyphIndices, charCount, dwGlyphMetrics);
-
-        DWRITE_FONT_METRICS dwFontMetrics{};
-        fontInfo.font->GetMetrics(&dwFontMetrics);
+        _fontFace->GetDesignGlyphMetrics(glyphIndices, charCount, dwGlyphMetrics);
 
         UINT32 maxAdvance = 0;
         for (int i = 0; i < charCount; i++)
             maxAdvance = max(maxAdvance, dwGlyphMetrics[i].advanceWidth);
 
-        return int(ceilf(float(maxAdvance) / 64.0f));
+        return int(maxAdvance);
     }
 };
 
@@ -182,34 +179,22 @@ optional<font_key> directwrite_shaper::load_font(font_description const& _descri
             ComPtr<IDWriteFontFace> fontFace;
             font->CreateFontFace(fontFace.GetAddressOf());
 
-            bool monospace = false;
-            IDWriteFontFace5* face5;
-            HRESULT hr = fontFace->QueryInterface(__uuidof(IDWriteFontFace5), (void **)&face5);
-            if (SUCCEEDED(hr))
-                if (!face5->IsMonospacedFont())
-                    continue;
+            auto dwMetrics = DWRITE_FONT_METRICS{};
+            font->GetMetrics(&dwMetrics);
 
-            IDWriteFont3* font3{};
-            hr = font->QueryInterface(__uuidof(IDWriteFont3), (void **)&font3);
-
-            // ComPtr<IDWriteTextFormat> textFormat;
-            // d->factory->CreateTextFormat(L"Arial", NULL, DWRITE_FONT_WEIGHT_REGULAR,
-            //     DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL,
-            //     12.0f / 72.0f * 96.0f, L"en-us", &textFormat);
-
-            // ComPtr<IDWriteTextLayout> layout{};
-            // d->factory->CreateTextLayout("abcABC", 6, textFormat.Get(),
-            //     100.0f, // maxWidth
-            //     100.0f, // maxHeight
-            //     layout.GetAddressOf());
-            // DWRITE_LINE_METRICS lm{};
-            // layout->GetLineMetrics();
-            // DWRITE_TEXT_METRICS tm{};
-            // layout->GetMetrics(&tm);
+            auto const dipScalar = _size.pt / dwMetrics.designUnitsPerEm;
+            auto const lineHeight = dwMetrics.ascent + dwMetrics.descent + dwMetrics.lineGap;
 
             auto fontInfo = FontInfo{};
             fontInfo.description = _description;
             fontInfo.size = _size;
+            fontInfo.metrics.line_height = int(ceil(lineHeight * dipScalar));
+            fontInfo.metrics.ascender = int(ceil(dwMetrics.ascent * dipScalar));
+            fontInfo.metrics.descender = int(ceil(dwMetrics.descent * dipScalar));
+            fontInfo.metrics.underline_position = int(ceil(dwMetrics.underlinePosition * dipScalar));
+            fontInfo.metrics.underline_thickness = int(ceil(dwMetrics.underlineThickness * dipScalar));
+            fontInfo.metrics.advance = int(ceil(d->computeAverageAdvance(fontFace.Get()) * dipScalar));
+
             font.As(&fontInfo.font);
             fontFace.As(&fontInfo.fontFace);
 
@@ -271,21 +256,7 @@ optional<font_key> directwrite_shaper::load_font(font_description const& _descri
 font_metrics directwrite_shaper::metrics(font_key _key) const
 {
     FontInfo const& fontInfo = d->fonts.at(_key);
-    auto dwMetrics = DWRITE_FONT_METRICS{};
-    fontInfo.font->GetMetrics(&dwMetrics);
-
-    auto const lineHeight = dwMetrics.ascent + dwMetrics.descent + dwMetrics.lineGap;
-    // FIXME: how to properly convert from designer font units to Pt or DIP?
-
-    auto output = font_metrics{};
-    output.line_height = lineHeight >> 6;
-    output.ascender = dwMetrics.ascent >> 6;
-    output.descender = dwMetrics.descent >> 6;
-    output.underline_position = dwMetrics.underlinePosition >> 6;
-    output.underline_thickness = dwMetrics.underlineThickness >> 6;
-    output.advance = d->computeAverageAdvance(_key);
-
-    return output;
+    return fontInfo.metrics;
 }
 
 void directwrite_shaper::shape(font_key _font,
@@ -294,8 +265,8 @@ void directwrite_shaper::shape(font_key _font,
                                unicode::Script _script,
                                shape_result& _result)
 {
-    // IDWriteTextAnalyzer* analyzer{};
-    // d->factory->CreateTextAnalyzer(&analyzer);
+    ComPtr<IDWriteTextAnalyzer> analyzer;
+    d->factory->CreateTextAnalyzer(analyzer.GetAddressOf());
 
     // WCHAR const *textString = L""; // TODO
     // UINT32 textLength; // TODO
