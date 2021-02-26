@@ -1,5 +1,6 @@
 # Milestone 0.2.0 checklist
 
+- [ ] FIXME: `reset` resets screen size to 80x25, should remain actual one.
 - [ ] debuglog: filter by logging tags (in a somewhat performant way), so the debuglog (when enabled) is not flooding.
 - [ ] CopyLastMarkRange seems not to work (at least for double-line prompts in zsh/p10k)
 

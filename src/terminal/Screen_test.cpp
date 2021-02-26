@@ -13,6 +13,7 @@
  */
 #include <terminal/Screen.h>
 #include <terminal/Viewport.h>
+#include <crispy/escape.h>
 #include <catch2/catch.hpp>
 #include <string_view>
 
@@ -1693,6 +1694,55 @@ TEST_CASE("peek into history", "[screen]")
     // CHECK_THROWS(screen.at({2, 4}));
     // CHECK_THROWS(screen.at({2, 0}));
     // XXX currently not checked, as they're intentionally using assert() instead.
+}
+
+TEST_CASE("captureBuffer", "[screen]")
+{
+    auto screen = MockScreen{{5, 2}};
+
+    //           [...      history ...  ...][main page area]
+    screen.write("12345\r\n67890\r\nABCDE\r\nFGHIJ\r\nKLMNO");
+
+    SECTION("main page area: default") {
+        screen.captureBuffer(1, 0); // full screen main page area
+        INFO(crispy::escape(screen.replyData));
+        CHECK(screen.replyData == "\033]314;FGHIJ\nKLMNO\n\033\\");
+    }
+    SECTION("main page area: 1 .. 1") {
+        screen.captureBuffer(1, 1);
+        INFO(crispy::escape(screen.replyData));
+        CHECK(screen.replyData == "\033]314;FGHIJ\n\033\\");
+    }
+    SECTION("main page area: 1 .. 2") {
+        screen.captureBuffer(1, 2);
+        INFO(crispy::escape(screen.replyData));
+        CHECK(screen.replyData == "\033]314;FGHIJ\nKLMNO\n\033\\");
+    }
+    SECTION("main page area: 1 .. 3 (overflow)") {
+        screen.captureBuffer(1, 3);
+        INFO(crispy::escape(screen.replyData));
+        CHECK(screen.replyData == "\033]314;FGHIJ\nKLMNO\n\033\\");
+    }
+    SECTION("2 lines history, 2 lines main") {
+        screen.captureBuffer(-1, 4);
+        INFO(crispy::escape(screen.replyData));
+        CHECK(screen.replyData == "\033]314;67890\nABCDE\nFGHIJ\nKLMNO\n\033\\");
+    }
+    SECTION("2 lines history, 2 lines main (+1 overflow)") {
+        screen.captureBuffer(-1, 5);
+        INFO(crispy::escape(screen.replyData));
+        CHECK(screen.replyData == "\033]314;67890\nABCDE\nFGHIJ\nKLMNO\n\033\\");
+    }
+    SECTION("4 lines history, 2 lines main (+1 overflow)") {
+        screen.captureBuffer(-3, 6);
+        INFO(crispy::escape(screen.replyData));
+        CHECK(screen.replyData == "\033]314;12345\n67890\nABCDE\nFGHIJ\nKLMNO\n\033\\");
+    }
+    SECTION("4 lines history (+1 underflow), 2 lines main (+1 overflow)") {
+        screen.captureBuffer(-3, 6);
+        INFO(crispy::escape(screen.replyData));
+        CHECK(screen.replyData == "\033]314;12345\n67890\nABCDE\nFGHIJ\nKLMNO\n\033\\");
+    }
 }
 
 TEST_CASE("render into history", "[screen]")

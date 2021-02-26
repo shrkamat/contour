@@ -14,6 +14,7 @@
 #include <contour/Config.h>
 #include <contour/Controller.h>
 #include <contour/TerminalWidget.h>
+#include <contour/CaptureScreen.h>
 
 #include <terminal/Parser.h>
 #include <crispy/debuglog.h>
@@ -24,6 +25,10 @@
 #include <QtCore/QThread>
 #include <QtWidgets/QApplication>
 #include <QSurfaceFormat>
+
+#include <string>
+#include <fstream>
+#include <string_view>
 
 #include <iostream>
 #include <iomanip>
@@ -110,6 +115,10 @@ int main(int argc, char* argv[])
         // auto const HTS = "\033H";
         // auto const TBC = "\033[g";
         // printf("\r%s        %s                        %s\r", TBC, HTS, HTS);
+
+        // Usage: contour capture [flags ...] <FILENAME> [START [COUNT]]
+        if (argc >= 2 && "capture"sv == argv[1])
+            return contour::captureScreenApp(argc - 1, argv + 1);
 
         QCoreApplication::setApplicationName("contour");
         QCoreApplication::setOrganizationName("contour");
