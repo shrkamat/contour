@@ -18,10 +18,11 @@
 
 #include <array>
 #include <cassert>
+#include <deque>
 #include <functional>
 #include <map>
 #include <optional>
-#include <deque>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -30,25 +31,28 @@
 #include <variant>
 #include <vector>
 
-// TODO for debugging only
-#include <fmt/format.h>
-#include <iostream>
+#if !defined(NDEBUG)
+    #include <fmt/format.h>
+    #include <iostream>
+    #define CLI_DEBUG(that) do { std::cerr << (that) << std::endl; } while (0)
+#else
+    #define CLI_DEBUG(that) do { } while (0)
+#endif
+
 
 namespace crispy::cli {
-
-#define CLI_DEBUG(that) do { std::cerr << (that) << std::endl; } while (0)
 
 /*
     Grammar
     =======
 
         CLI     := Command
-        Command := NAME Option* Section*
+        Command := NAME Option* SubCommand?
         Option  := NAME [Value]
-        Section := NAME Option* [Section]
+        SubCommand := Command
 
         Value   := STR | BOOL | FLOAT | INT | UINT
-        NAME    := [a-zA-Z_-]+
+        NAME    := <name without = or leading -'s>
 
     Examples
     ========
@@ -378,6 +382,60 @@ inline StringViewList stringViewList(int argc, char const* _argv[])
 inline std::optional<FlagStore> parse(Command const& _command, int _argc, char const* _argv[])
 {
     return parse(_command, stringViewList(_argc, _argv));
+}
+
+/**
+ * Constructs a usage text suitable for printing out the command usage syntax in terminals.
+ *
+ * @param _command    The command to construct the usage text for.
+ * @param colored     Boolean indicating whether or not to colorize the output via VT sequences.
+ * @param _textWidth  Number of characters to write at most per line.
+ */
+std::string usageText(Command const& _command, bool colored, int _textWidth)
+{
+    std::stringstream sstr;
+
+    sstr << _command.name;
+
+    for (Option const& option : _command.options)
+    {
+        sstr << ' ';
+        if (std::holds_alternative<bool>(option.value))
+            sstr << "[" << option.name << "]";
+        else if (std::holds_alternative<int>(option.value))
+            sstr << option.name << ' ' << "INT";
+        else if (std::holds_alternative<unsigned int>(option.value))
+            sstr << option.name << ' ' << "UINT";
+        else if (std::holds_alternative<double>(option.value))
+            sstr << option.name << ' ' << "FLOAT";
+    }
+
+    if (_command.children.size())
+    {
+        sstr << " [";
+        int i = 0;
+        for (Command const& subcmd : _command.children)
+        {
+            if (i++)
+                sstr << " | ";
+            sstr << usageText(subcmd, colored, _textWidth);
+        }
+        sstr << "]";
+    }
+
+    return ""; // TODO
+}
+
+/**
+ * Constructs a help text suitable for printing out the command usage syntax in terminals.
+ *
+ * @param _command    The command to construct the usage text for.
+ * @param colored     Boolean indicating whether or not to colorize the output via VT sequences.
+ * @param _textWidth  Number of characters to write at most per line.
+ */
+std::string helpText(Command const& _command, bool colored, int _textWidth)
+{
+    return ""; // TODO
 }
 
 }

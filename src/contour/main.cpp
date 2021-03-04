@@ -16,6 +16,8 @@
 #include <contour/TerminalWidget.h>
 
 #include <terminal/Parser.h>
+
+#include <crispy/CLI.h>
 #include <crispy/debuglog.h>
 #include <crispy/indexed.h>
 #include <crispy/utils.h>
@@ -119,6 +121,30 @@ int main(int argc, char* argv[])
         QApplication app(argc, argv);
 
         QSurfaceFormat::setDefaultFormat(contour::TerminalWidget::surfaceFormat());
+
+        namespace CLI = crispy::cli;
+        auto const cliDef = CLI::Command{
+            "contour",
+            "help here",
+            CLI::OptionList{
+                CLI::Option{"config", CLI::Value{"~/.config/contour/contour.yml"}, "Path to configuration file to load at startup."sv},
+                CLI::Option{"profile", CLI::Value{""}, "Terminal Profile to load."sv},
+                CLI::Option{"debug"sv, CLI::Value{""s}, "Enables debug logging, using a comma seperated list of tags."sv},
+                CLI::Option{"list-debug-tags"sv, CLI::Value{false}, "Lists all available debug tags and exits."sv},
+                // TODO
+            },
+            CLI::CommandList{
+                CLI::Command{
+                    "capture",
+                    "some capture help text",
+                    {
+                        CLI::Option{"logical", CLI::Value{false}, "help there"},
+                        CLI::Option{"timeout", CLI::Value{1.0}, "help here"},
+                        CLI::Option{"output", CLI::Value{""}},
+                    }
+                }
+            }
+        };
 
         auto cli = contour::CLI{};
         cli.process(app);

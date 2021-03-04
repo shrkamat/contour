@@ -14,6 +14,22 @@
 #include <crispy/CLI.h>
 #include <catch2/catch.hpp>
 
+// TODO:
+//
+// - [ ] variations of option names and value attachements
+//       all of: NAME [VALUE] | --NAME [VALUE] | -NAME [VALUE] | --NAME[=VALUE]
+// - [ ] help output printing (colored, non-colored)
+// - [ ] help output auto-detecting screen width, via: VT seq, ioctl(TIOCGWINSZ), manual
+// - [ ] presense optional vs presense required
+// - [x] test option type: BOOL
+// - [ ] test option type: INT
+// - [ ] test option type: UINT
+// - [ ] test option type: FLOAT (also being passed as INT positive / negative)
+// - [ ] test option type: STR (can be any arbitrary string)
+// - [ ] test option defaults
+// - [ ] CONSIDER: supporting positional arguments (free sanding values of single given type)
+//
+
 using std::optional;
 using std::string;
 
@@ -22,7 +38,7 @@ namespace cli = crispy::cli;
 using namespace std::string_view_literals;
 using namespace std::string_literals;
 
-namespace std { // little Catch2 debug-print helper
+namespace std { // {{{ little Catch2 debug-print helper
     std::ostream& operator<<(std::ostream& os, cli::Value const& _value)
     {
         if (std::holds_alternative<bool>(_value))
@@ -39,16 +55,9 @@ namespace std { // little Catch2 debug-print helper
             os << fmt::format("(?) ?");
         return os;
     }
-}
+} // }}}
 
-// Variantions of naming an option:
-//    NAME
-//    --NAME
-//    -NAME
-//
-//    with NAME being a prefix of name, including.
-
-TEST_CASE("CLI.bool")
+TEST_CASE("CLI.option.type.bool")
 {
     auto const cmd = cli::Command{
         "contour",
@@ -87,7 +96,7 @@ TEST_CASE("CLI.bool")
     }
 }
 
-TEST_CASE("CLI.simple")
+TEST_CASE("CLI.contour-full-test")
 {
     auto const cmd = cli::Command{
         "contour",
