@@ -42,6 +42,7 @@ option(CRISPY_TESTING "Enables building of unittests for crispy library [default
 if(CRISPY_TESTING)
     enable_testing()
     add_executable(crispy_test
+        CLI_test.cpp
         base64_test.cpp
         indexed_test.cpp
         compose_test.cpp
