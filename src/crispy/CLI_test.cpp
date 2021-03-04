@@ -14,13 +14,21 @@
 #include <crispy/CLI.h>
 #include <catch2/catch.hpp>
 
-// TODO:
+// TODO API / impl:
+//
+// - [ ] Add NamedValue { Value value; std::string_view placeholder; } and use this where Value{} was used.
+// - [ ] option name variation parsing]
+// - [ ] option presence validation (optional, required)
+// - [ ] help output
+// - [ ] easy accessor for flag values
+//
+// TODO tests:
 //
 // - [ ] variations of option names and value attachements
 //       all of: NAME [VALUE] | --NAME [VALUE] | -NAME [VALUE] | --NAME[=VALUE]
 // - [ ] help output printing (colored, non-colored)
 // - [ ] help output auto-detecting screen width, via: VT seq, ioctl(TIOCGWINSZ), manual
-// - [ ] presense optional vs presense required
+// - [ ] presence optional vs presence required
 // - [x] test option type: BOOL
 // - [ ] test option type: INT
 // - [ ] test option type: UINT
@@ -28,6 +36,7 @@
 // - [ ] test option type: STR (can be any arbitrary string)
 // - [ ] test option defaults
 // - [ ] CONSIDER: supporting positional arguments (free sanding values of single given type)
+// - [ ] test command chains up to 3 levels deep (including proper help output, maybe via /bin/ip emul?)
 //
 
 using std::optional;

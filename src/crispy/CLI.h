@@ -70,30 +70,38 @@ namespace crispy::cli {
 using Value = std::variant<int, unsigned int, std::string, double, bool>;
 using Name = std::string;
 
-enum class Presence {
+enum class Presence
+{
     Optional,
     Required,
 };
 
-struct Option {
+struct Option
+{
     std::string_view name;
     Value value;
     std::string_view helpText = {};
+    std::string_view placeholder = {}; // TODO: move right below `Value value{};`
     Presence presence = Presence::Optional;
 };
 
 using OptionList = std::vector<Option>;
 
-struct Command {
+struct Command
+{
     std::string_view name;
     std::string_view helpText = {};
     OptionList options = {};
     std::vector<Command> children = {};
+
+    // TODO: default child command, if children are available AND options is empty.
+    //       maybe: std::variant<OptionList, DefaultCommand>;
 };
 
 using CommandList = std::vector<Command>;
 
-struct FlagStore {
+struct FlagStore
+{
     std::map<Name, Value> values;
     // TODO: do we need any more members?
 };
@@ -339,8 +347,7 @@ namespace detail // {{{
     inline auto parseCommand(Command const& _command, ParseContext& _context) -> bool
     {
         // Command := NAME Option* Section*
-        assert(currentToken(_context) == _command.name);
-        consumeToken(_context); // name was already ensured to be right
+        consumeToken(_context); // Name was already ensured to be right (or is assumed to be right).
         _context.currentCommand.emplace_back(&_command);
 
         parseOptionList(_context);
@@ -359,8 +366,9 @@ std::optional<FlagStore> parse(Command const& _command, StringViewList const& _a
 {
     auto context = detail::ParseContext{ _args };
 
-    if (currentToken(context) != _command.name)
-        return std::nullopt;
+    // XXX do not enforce checking the first token, as for main()'s argv[0] this most likely is different.
+    // if (currentToken(context) != _command.name)
+    //     return std::nullopt;
 
     if (!detail::parseCommand(_command, context))
         return std::nullopt;
@@ -368,7 +376,7 @@ std::optional<FlagStore> parse(Command const& _command, StringViewList const& _a
     return std::move(context.output);
 }
 
-inline StringViewList stringViewList(int argc, char const* _argv[])
+inline StringViewList stringViewList(int argc, char const * const * _argv)
 {
     StringViewList output;
     output.resize(argc);
@@ -379,7 +387,7 @@ inline StringViewList stringViewList(int argc, char const* _argv[])
     return output;
 }
 
-inline std::optional<FlagStore> parse(Command const& _command, int _argc, char const* _argv[])
+inline std::optional<FlagStore> parse(Command const& _command, int _argc, char const* const* _argv)
 {
     return parse(_command, stringViewList(_argc, _argv));
 }
@@ -391,39 +399,59 @@ inline std::optional<FlagStore> parse(Command const& _command, int _argc, char c
  * @param colored     Boolean indicating whether or not to colorize the output via VT sequences.
  * @param _textWidth  Number of characters to write at most per line.
  */
-std::string usageText(Command const& _command, bool colored, int _textWidth)
+std::string usageText(Command const& _command, bool colored, int _textWidth, std::string const& _cmdPrefix = "")
 {
-    std::stringstream sstr;
-
-    sstr << _command.name;
-
-    for (Option const& option : _command.options)
+    if (_command.children.empty())
     {
-        sstr << ' ';
-        if (std::holds_alternative<bool>(option.value))
-            sstr << "[" << option.name << "]";
-        else if (std::holds_alternative<int>(option.value))
-            sstr << option.name << ' ' << "INT";
-        else if (std::holds_alternative<unsigned int>(option.value))
-            sstr << option.name << ' ' << "UINT";
-        else if (std::holds_alternative<double>(option.value))
-            sstr << option.name << ' ' << "FLOAT";
-    }
-
-    if (_command.children.size())
-    {
-        sstr << " [";
-        int i = 0;
-        for (Command const& subcmd : _command.children)
+        std::stringstream sstr;
+        sstr << _cmdPrefix << _command.name;
+        for (Option const& option : _command.options)
         {
-            if (i++)
-                sstr << " | ";
-            sstr << usageText(subcmd, colored, _textWidth);
+            if (std::holds_alternative<bool>(option.value))
+                sstr << ' ' << "[" << option.name << "]";
+            else if (std::holds_alternative<int>(option.value))
+                sstr << ' ' << option.name << ' ' << "INT";
+            else if (std::holds_alternative<unsigned int>(option.value))
+                sstr << ' ' << option.name << ' ' << "UINT";
+            else if (std::holds_alternative<double>(option.value))
+                sstr << ' ' << option.name << ' ' << "FLOAT";
         }
-        sstr << "]";
+        sstr << '\n';
+        return sstr.str();
     }
+    else
+    {
+        /*
+         * a
+         * a b
+         * a b 1
+         * a b 2
+         * a b 3 u
+         * a b 3 v A
+         * a b 3 v B
+         *
+         */
 
-    return ""; // TODO
+        std::stringstream prefix;
+        prefix << _cmdPrefix << _command.name << ' ';
+        for (Option const& option : _command.options)
+        {
+            if (std::holds_alternative<bool>(option.value))
+                prefix << "[" << option.name << "]" << ' ';
+            else if (std::holds_alternative<int>(option.value))
+                prefix << option.name << ' ' << "INT" << ' ';
+            else if (std::holds_alternative<unsigned int>(option.value))
+                prefix << option.name << ' ' << "UINT" << ' ';
+            else if (std::holds_alternative<double>(option.value))
+                prefix << option.name << ' ' << "FLOAT" << ' ';
+        }
+        std::string const prefixStr = prefix.str();
+
+        std::stringstream sstr;
+        for (Command const& subcmd : _command.children)
+            sstr << usageText(subcmd, colored, _textWidth, prefixStr);
+        return sstr.str();
+    }
 }
 
 /**
@@ -435,6 +463,8 @@ std::string usageText(Command const& _command, bool colored, int _textWidth)
  */
 std::string helpText(Command const& _command, bool colored, int _textWidth)
 {
+    // TODO: if sub commands are available, list each seperately
+    // TODO: also print each option's default, if available
     return ""; // TODO
 }
 

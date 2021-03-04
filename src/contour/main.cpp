@@ -122,29 +122,53 @@ int main(int argc, char* argv[])
 
         QSurfaceFormat::setDefaultFormat(contour::TerminalWidget::surfaceFormat());
 
-        namespace CLI = crispy::cli;
-        auto const cliDef = CLI::Command{
-            "contour",
-            "help here",
-            CLI::OptionList{
-                CLI::Option{"config", CLI::Value{"~/.config/contour/contour.yml"}, "Path to configuration file to load at startup."sv},
-                CLI::Option{"profile", CLI::Value{""}, "Terminal Profile to load."sv},
-                CLI::Option{"debug"sv, CLI::Value{""s}, "Enables debug logging, using a comma seperated list of tags."sv},
-                CLI::Option{"list-debug-tags"sv, CLI::Value{false}, "Lists all available debug tags and exits."sv},
-                // TODO
-            },
-            CLI::CommandList{
-                CLI::Command{
-                    "capture",
-                    "some capture help text",
-                    {
-                        CLI::Option{"logical", CLI::Value{false}, "help there"},
-                        CLI::Option{"timeout", CLI::Value{1.0}, "help here"},
-                        CLI::Option{"output", CLI::Value{""}},
+        {
+            namespace CLI = crispy::cli;
+            auto const cliDef = CLI::Command{
+                "contour",
+                "Contour Termina Emulator",
+                CLI::OptionList{},
+                CLI::CommandList{
+                    CLI::Command{
+                        "terminal",
+                        "Spawns a new terminal application",
+                        CLI::OptionList{
+                            CLI::Option{"config", CLI::Value{"~/.config/contour/contour.yml"}, "Path to configuration file to load at startup."},
+                            CLI::Option{"profile", CLI::Value{""}, "Terminal Profile to load."},
+                            CLI::Option{"debug", CLI::Value{""s}, "Enables debug logging, using a comma seperated list of tags."},
+                            CLI::Option{"list-debug-tags", CLI::Value{false}, "Lists all available debug tags and exits."},
+                            CLI::Option{"live-config", CLI::Value{false}, "Enables live config reloading."},
+                            CLI::Option{"working-directory", CLI::Value{"."}, "Sets initial working directory."},
+                            // TODO
+                        },
+                        // TODO: make "terminal" the default command, i.e. if no command was given, this will be used.
+                    },
+                    CLI::Command{"help", "Shows this help"},
+                    CLI::Command{"parser-table", "Dumps parser table"},
+                    CLI::Command{
+                        "capture",
+                        "some capture help text",
+                        {
+                            CLI::Option{"logical", CLI::Value{false}, "Tells the terminal to use logical lines for counting and capturing."},
+                            CLI::Option{"timeout", CLI::Value{1.0}, "Sets timeout seconds to wait for terminal to respond."},
+                            CLI::Option{"count", CLI::Value{0}, "The number of lines to capture"},
+                            CLI::Option{"output", CLI::Value{"Output file name to store the screen capture to."}},
+                        }
                     }
                 }
+            };
+
+            std::cerr << "Usage:\n" << CLI::usageText(cliDef, true, 80, "  ") << "\n";
+
+            optional<CLI::FlagStore> const flagsOpt = CLI::parse(cliDef, argc, argv);
+            if (!flagsOpt.has_value())
+            {
+                std::cerr << "Failed to parse command line parameters.\n";
+                return EXIT_FAILURE;
             }
-        };
+            return 0;
+
+        }
 
         auto cli = contour::CLI{};
         cli.process(app);
