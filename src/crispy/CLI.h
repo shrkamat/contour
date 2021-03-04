@@ -17,6 +17,7 @@
 #include <crispy/indexed.h>
 
 #include <array>
+#include <cassert>
 #include <functional>
 #include <map>
 #include <optional>
@@ -29,7 +30,13 @@
 #include <variant>
 #include <vector>
 
+// TODO for debugging only
+#include <fmt/format.h>
+#include <iostream>
+
 namespace crispy::cli {
+
+#define CLI_DEBUG(that) do { std::cerr << (that) << std::endl; } while (0)
 
 /*
     Grammar
@@ -115,7 +122,7 @@ namespace detail // {{{
         return output;
     } //  }}}
 
-    inline auto peekToken(ParseContext const& _context) -> std::string_view
+    inline auto currentToken(ParseContext const& _context) -> std::string_view
     {
         if (_context.pos >= _context.args.size())
             return std::string_view{}; // not enough arguments available
@@ -135,7 +142,7 @@ namespace detail // {{{
 
     inline auto isOptionName(ParseContext const& _context) -> bool
     {
-        auto const& current = _context.args.at(_context.pos);
+        auto const current = currentToken(_context);
 
         for (auto const& option : _context.currentCommand.back()->options)
             if (current == option.name)
@@ -161,6 +168,7 @@ namespace detail // {{{
         if (_context.pos >= _context.args.size())
             return std::nullopt; // not enough arguments available
 
+        CLI_DEBUG(fmt::format("Consuming token '{}'", currentToken(_context)));
         return _context.args.at(_context.pos++);
     }
 
@@ -178,10 +186,10 @@ namespace detail // {{{
         auto const& text = valueOpt.value();
 
         // BOOL
-        if (text == "yes" || text == "true")
+        if (isTrue(text))
             return Value{true};
 
-        if (text == "no" || text == "false")
+        if (isFalse(text))
             return Value{false};
 
         // FLOAT
@@ -219,36 +227,34 @@ namespace detail // {{{
 
     inline auto parseOption(ParseContext& _context) -> std::optional<std::pair<std::string_view, Value>> // {{{
     {
+        CLI_DEBUG(fmt::format("parseOption {}", currentToken(_context)));
         // Option  := NAME [Value]
-        auto const nameOpt = consumeToken(_context);
-        if (!nameOpt.has_value())
-            return std::nullopt;
-
-        auto const& optionName = nameOpt.value();
+        auto const optionName = currentToken(_context);
 
         for (auto const& option : _context.currentCommand.back()->options)
         {
-            if (option.name == optionName)
+            if (optionName == option.name)
             {
+                consumeToken(_context);
                 _context.currentOption.emplace_back(&option);
 
                 // parse the value, if available & required
 
                 if (std::holds_alternative<bool>(_context.currentOption.back()->value))
                 {
-                    auto const peekedToken = peekToken(_context);
+                    auto const token = currentToken(_context);
 
                     // if next token is not a boolean token, we assume TRUE
-                    if (!isTrue(peekedToken) && !isFalse(peekedToken))
+                    if (!isTrue(token) && !isFalse(token))
                         return std::pair{optionName, Value{true}};
 
-                    if (isTrue(peekedToken))
+                    if (isTrue(token))
                     {
                         consumeToken(_context);
                         return std::pair{optionName, Value{true}};
                     }
 
-                    if (isFalse(peekedToken))
+                    if (isFalse(token))
                     {
                         consumeToken(_context);
                         return std::pair{optionName, Value{false}};
@@ -273,17 +279,43 @@ namespace detail // {{{
 
     inline auto parseOptionList(ParseContext& _context) -> std::optional<OptionList>
     {
-        // Option  := Option*
+        // Option := Option*
+
+        auto const optionPrefix = namePrefix(_context);
+
+        // pre-fill defaults
+        for (Option const& option : _context.currentCommand.back()->options)
+        {
+            auto const fqdn = optionPrefix + "." + Name(option.name);
+            _context.output.values[fqdn] = option.value;
+        }
+
+
+        // consume options
         while (isOptionName(_context))
         {
             auto optionOpt = parseOption(_context);
             if (!optionOpt.has_value())
                 break;
 
-            auto optionPrefix = namePrefix(_context);
             auto& [name, value] = optionOpt.value();
+            auto const fqdn = optionPrefix + "." + Name(name);
 
-            _context.output.values[optionPrefix + Name(name)] = std::move(value);
+            CLI_DEBUG(fmt::format("option: {}", fqdn));
+            if (std::holds_alternative<bool>(value))
+                CLI_DEBUG(fmt::format("    -> (bool) {}", std::get<bool>(value)));
+            else if (std::holds_alternative<int>(value))
+                CLI_DEBUG(fmt::format("    -> (int) {}", std::get<int>(value)));
+            else if (std::holds_alternative<unsigned>(value))
+                CLI_DEBUG(fmt::format("    -> (int) {}", std::get<unsigned>(value)));
+            else if (std::holds_alternative<double>(value))
+                CLI_DEBUG(fmt::format("    -> (double) {}", std::get<double>(value)));
+            else if (std::holds_alternative<std::string>(value))
+                CLI_DEBUG(fmt::format("    -> (int) {}", std::get<std::string>(value)));
+            else
+                CLI_DEBUG(fmt::format("    -> (?) ?"));
+
+            _context.output.values[fqdn] = std::move(value);
         }
 
         return std::nullopt; // TODO
@@ -291,10 +323,10 @@ namespace detail // {{{
 
     inline auto tryLookupCommand(ParseContext const& _context) -> Command const*
     {
-        auto const peekedToken = peekToken(_context);
+        auto const token = currentToken(_context);
 
         for (Command const& command : _context.currentCommand.back()->children)
-            if (peekedToken == command.name)
+            if (token == command.name)
                 return &command;
 
         return nullptr; // not found
@@ -303,11 +335,8 @@ namespace detail // {{{
     inline auto parseCommand(Command const& _command, ParseContext& _context) -> bool
     {
         // Command := NAME Option* Section*
-
-        if (_command.name != peekToken(_context))
-            return false;
-
-        consumeToken(_context);
+        assert(currentToken(_context) == _command.name);
+        consumeToken(_context); // name was already ensured to be right
         _context.currentCommand.emplace_back(&_command);
 
         parseOptionList(_context);
@@ -325,6 +354,9 @@ namespace detail // {{{
 std::optional<FlagStore> parse(Command const& _command, StringViewList const& _args)
 {
     auto context = detail::ParseContext{ _args };
+
+    if (currentToken(context) != _command.name)
+        return std::nullopt;
 
     if (!detail::parseCommand(_command, context))
         return std::nullopt;

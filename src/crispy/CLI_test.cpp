@@ -17,9 +17,75 @@
 using std::optional;
 using std::string;
 
-using namespace crispy;
+namespace cli = crispy::cli;
+
 using namespace std::string_view_literals;
 using namespace std::string_literals;
+
+namespace std { // little Catch2 debug-print helper
+    std::ostream& operator<<(std::ostream& os, cli::Value const& _value)
+    {
+        if (std::holds_alternative<bool>(_value))
+            os << fmt::format("(bool) {}", std::get<bool>(_value));
+        else if (std::holds_alternative<int>(_value))
+            os << fmt::format("(int) {}", std::get<int>(_value));
+        else if (std::holds_alternative<unsigned>(_value))
+            os << fmt::format("(int) {}", std::get<unsigned>(_value));
+        else if (std::holds_alternative<double>(_value))
+            os << fmt::format("(double) {}", std::get<double>(_value));
+        else if (std::holds_alternative<std::string>(_value))
+            os << fmt::format("(string) \"{}\"", std::get<std::string>(_value));
+        else
+            os << fmt::format("(?) ?");
+        return os;
+    }
+}
+
+// Variantions of naming an option:
+//    NAME
+//    --NAME
+//    -NAME
+//
+//    with NAME being a prefix of name, including.
+
+TEST_CASE("CLI.bool")
+{
+    auto const cmd = cli::Command{
+        "contour",
+        "help here",
+        cli::OptionList{
+            cli::Option{"verbose"sv, cli::Value{false}, "Help text here"sv}
+        },
+    };
+
+    SECTION("set") {
+        auto const args = cli::StringViewList{"contour", "verbose"};
+        optional<cli::FlagStore> const flagsOpt = cli::parse(cmd, args);
+        REQUIRE(flagsOpt.has_value());
+        CHECK(flagsOpt.value().values.at("contour.verbose") == cli::Value{true});
+    }
+
+    SECTION("set true") {
+        auto const args = cli::StringViewList{"contour", "verbose", "true"};
+        optional<cli::FlagStore> const flagsOpt = cli::parse(cmd, args);
+        REQUIRE(flagsOpt.has_value());
+        CHECK(flagsOpt.value().values.at("contour.verbose") == cli::Value{true});
+    }
+
+    SECTION("set true") {
+        auto const args = cli::StringViewList{"contour", "verbose", "false"};
+        optional<cli::FlagStore> const flagsOpt = cli::parse(cmd, args);
+        REQUIRE(flagsOpt.has_value());
+        CHECK(flagsOpt.value().values.at("contour.verbose") == cli::Value{false});
+    }
+
+    SECTION("unset") {
+        auto const args = cli::StringViewList{"contour"};
+        optional<cli::FlagStore> const flagsOpt = cli::parse(cmd, args);
+        REQUIRE(flagsOpt.has_value());
+        CHECK(flagsOpt.value().values.at("contour.verbose") == cli::Value{false});
+    }
+}
 
 TEST_CASE("CLI.simple")
 {
@@ -45,12 +111,16 @@ TEST_CASE("CLI.simple")
     };
 
     auto const args = cli::StringViewList{"contour", "capture", "logical", "output", "out.vt"};
-    optional<cli::FlagStore> flagsOpt = cli::parse(cmd, args);
+    optional<cli::FlagStore> const flagsOpt = cli::parse(cmd, args);
     REQUIRE(flagsOpt.has_value());
 
     cli::FlagStore const& flags = flagsOpt.value();
 
-    CHECK(flags.values.size() == 2);
+    CHECK(flags.values.size() == 6);
+    CHECK(flags.values.at("contour.debug") == cli::Value{""s});
+    CHECK(flags.values.at("contour.config") == cli::Value{"~/.config/contour/contour.yml"});
+    CHECK(flags.values.at("contour.profile") == cli::Value{""s});
     CHECK(flags.values.at("contour.capture.logical") == cli::Value{true});
     CHECK(flags.values.at("contour.capture.output") == cli::Value{"out.vt"});
+    CHECK(flags.values.at("contour.capture.timeout") == cli::Value{1.0});
 }
