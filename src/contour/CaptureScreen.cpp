@@ -63,7 +63,7 @@ namespace
             "  -h             Shows this help text.\n"
             "  -o FILENAME    Path to file which will be written with the screen capture.\n"
             "  -t TIMEOUT     Sets timeout seconds to wait for terminal to respond. (default: 1.0)\n"
-            "  COUNT          The number of lines to capture.\n"
+            "  -c COUNT       The number of lines to capture.\n"
             "\n"
             ;
     }
@@ -246,13 +246,16 @@ namespace
                         return nullopt;
                     settings.timeout = std::stof(argv[++i]);
                 }
+                else if (arg == "-c"sv)
+                {
+                    if (!(i + 1 < argc))
+                        return nullopt;
+                    settings.lineCount = std::stoi(argv[++i]);
+                }
                 else
                     break;
                 i++;
             }
-
-            if (i < argc)
-                settings.lineCount = stoi(argv[i++]);
 
             if (i < argc)
                 return nullopt; // Stray arguments found.
@@ -294,7 +297,6 @@ namespace
                 perror("read");
                 return false;
             }
-            cerr << fmt::format("Read {} bytes.\n", rv);
 
             copy_n(buf, rv, back_inserter(_reply));
 
