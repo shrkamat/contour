@@ -104,6 +104,14 @@ struct FlagStore
 {
     std::map<Name, Value> values;
     // TODO: do we need any more members?
+
+    bool boolean(std::string const& _key) const { return std::get<bool>(values.at(_key)); }
+    int integer(std::string const& _key) const { return std::get<int>(values.at(_key)); }
+    unsigned uint(std::string const& _key) const { return std::get<unsigned>(values.at(_key)); }
+    double real(std::string const& _key) const { return std::get<double>(values.at(_key)); }
+    std::string const& str(std::string const& _key) const { return std::get<std::string>(values.at(_key)); }
+
+    template <typename T> T get(std::string const& _key) const { return std::get<T>(values.at(_key)); }
 };
 
 using StringViewList = std::vector<std::string_view>;
@@ -293,6 +301,12 @@ namespace detail // {{{
     {
         // Option := Option*
 
+        auto const setOption = [&](std::string const& _key, Value _value) -> void
+        {
+            CLI_DEBUG(fmt::format("setOption({}): {}", _key, _value));
+            _context.output.values[_key] = std::move(_value);
+        };
+
         auto const optionPrefix = namePrefix(_context);
 
         // pre-fill defaults
@@ -300,8 +314,8 @@ namespace detail // {{{
         {
             auto const fqdn = optionPrefix + "." + Name(option.name);
             _context.output.values[fqdn] = option.value;
+            setOption(fqdn, option.value);
         }
-
 
         // consume options
         while (isOptionName(_context))
@@ -327,7 +341,7 @@ namespace detail // {{{
             else
                 CLI_DEBUG(fmt::format("    -> (?) ?"));
 
-            _context.output.values[fqdn] = std::move(value);
+            setOption(fqdn, std::move(value));
         }
 
         return std::nullopt; // TODO
@@ -362,8 +376,19 @@ namespace detail // {{{
     }
 } // }}}
 
+void validate(Command const& _command)
+{
+    // TODO: throw if Command is not well defined.
+    //
+    // - no duplicated nems in same scope
+    // - names must not start with '-' (dash)
+    // - must not contain '='
+}
+
 std::optional<FlagStore> parse(Command const& _command, StringViewList const& _args)
 {
+    validate(_command);
+
     auto context = detail::ParseContext{ _args };
 
     // XXX do not enforce checking the first token, as for main()'s argv[0] this most likely is different.

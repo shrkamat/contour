@@ -158,14 +158,21 @@ int main(int argc, char* argv[])
                 }
             };
 
-            std::cerr << "Usage:\n" << CLI::usageText(cliDef, true, 80, "  ") << "\n";
-
             optional<CLI::FlagStore> const flagsOpt = CLI::parse(cliDef, argc, argv);
             if (!flagsOpt.has_value())
             {
                 std::cerr << "Failed to parse command line parameters.\n";
                 return EXIT_FAILURE;
             }
+            CLI::FlagStore const& flags = flagsOpt.value();
+
+            if (flags.get<bool>("contour.help"))
+            {
+                std::cout << "Usage:\n" << CLI::usageText(cliDef, true, 80, "  ") << "\n";
+                return EXIT_SUCCESS;
+            }
+
+            std::cerr << "Usage:\n" << CLI::usageText(cliDef, true, 80, "  ") << "\n";
             return 0;
 
         }
